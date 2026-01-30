@@ -35,19 +35,15 @@ static class Helpers
         }
     }
 
-    static string? ExtractXML(string soapResponse, int category)
+    static string? ExtractXML(string soapResponse)
     {
-        if (category != 2)
-            return null;
-
         var doc = XDocument.Parse(soapResponse);
 
-        XNamespace ns1 = $"http://{Config.BaseURL}/";
-
-        var valueElement = doc.Descendants(ns1 + "value").FirstOrDefault();
+        var valueElement = doc.Descendants().FirstOrDefault(e => e.Name.LocalName == "value");
 
         return valueElement?.Value.Trim();
     }
+
 
     private static bool IsPortBindable(int port)
     {
@@ -80,7 +76,6 @@ static class Helpers
             Encoding.UTF8.GetBytes(expected)
         );
     }
-
 
     public static int GetPort()
     {
@@ -164,6 +159,7 @@ static class Helpers
 
         if (!SOAP(jobId, port, placeId, Config.GSScript, 604800, 1, out render))
         {
+            Logger.Info($"{jobId} SOAP action failed");
             Kill(proc);
             return false;
         }
@@ -182,7 +178,7 @@ static class Helpers
 
             ProcessStartInfo psi;
 
-            Logger.Info($"Using {Config.RCCDirectory} for RCCService with {port}");
+            Logger.Info($"Using {Config.RCCDirectory} for RCCService with port {port}");
 
             if (isWindows)
             {
@@ -195,7 +191,7 @@ static class Helpers
                     WorkingDirectory = Config.RCCDirectory
                 };
 
-                Logger.Info($"RCCServuce starting on {port} using {Config.RCCDirectory}");
+                Logger.Info($"RCCServuce starting");
             }
             else
             {
@@ -208,7 +204,7 @@ static class Helpers
                     WorkingDirectory = Config.RCCDirectory
                 };
 
-                Logger.Info($"RCCServuce starting via wine on {port} using {Config.RCCDirectory}");
+                Logger.Info($"RCCServuce starting via wine");
             }
 
             return Process.Start(psi);
@@ -222,8 +218,34 @@ static class Helpers
 
     private static bool AwaitRCCService(int port, int timeoutMs)
     {
-        return true;
+        var sw = Stopwatch.StartNew();
+
+        using var client = new HttpClient
+        {
+            Timeout = TimeSpan.FromSeconds(5)
+        };
+
+        while (sw.ElapsedMilliseconds < timeoutMs)
+        {
+            try
+            {
+                var resp = client.GetAsync($"http://127.0.0.1:{port}").Result;
+
+                if (resp.Content.Headers.ContentType?.MediaType == "text/xml")
+                {
+                    Logger.Info("RCCService alive, continuing");
+                    return true;
+                }
+            }
+            catch {}
+
+            Thread.Sleep(250);
+        }
+
+        Logger.Error("Timed out waiting for RCCService");
+        return false;
     }
+
 
     private static bool SOAP(string jobId, int port, int placeId, string type, int howlonguntilwedie, int category, out string? render)
     {
@@ -235,43 +257,53 @@ static class Helpers
                 Timeout = TimeSpan.FromSeconds(60)
             };
 
-            string soap = $@"<?xml version=""1.0"" encoding=""UTF-8""?>
-<SOAP-ENV:Envelope xmlns:SOAP-ENV=""http://schemas.xmlsoap.org/soap/envelope/"" xmlns:SOAP-ENC=""http://schemas.xmlsoap.org/soap/encoding/"" xmlns:xsi=""http://www.w3.org/2001/XMLSchema-instance"" xmlns:xsd=""http://www.w3.org/2001/XMLSchema"" xmlns:ns1=""http://{Config.BaseURL}/"" xmlns:ns2=""http://{Config.BaseURL}/RCCServiceSoap12"">
-    <SOAP-ENV:Body>
-        <ns1:OpenJob>
-            <ns1:job>
-                <ns1:id>{jobId}</ns1:id>
-                <ns1:expirationInSeconds>{howlonguntilwedie}</ns1:expirationInSeconds>
-                <ns1:category>{category}</ns1:category>
-                <ns1:cores>{Config.cores}</ns1:cores>
-            </ns1:job>
-            <ns1:script>
-                <ns1:name>GameScript</ns1:name>
-                <ns1:script><![CDATA[
+            soapClient.DefaultRequestHeaders.Host = $"127.0.0.1:{port}";
+
+            string soap = $@"<soapenv:Envelope xmlns:soapenv=""http://schemas.xmlsoap.org/soap/envelope/"" xmlns:rob=""http://{Config.BaseURL}/"">
+	<soapenv:Body>
+        <rob:OpenJob>
+            <rob:job>
+                <rob:id>{jobId}</rob:id>
+                <rob:expirationInSeconds>999999999</rob:expirationInSeconds>
+                <rob:cores>{Config.cores}</rob:cores>
+            </rob:job>
+            <rob:script>
+                <rob:name>GameScript</rob:name>
+                <rob:script><![CDATA[
                     {type}
-                ]]></ns1:script>
-            </ns1:script>
-        </ns1:OpenJob>
-    </SOAP-ENV:Body>
-</SOAP-ENV:Envelope>
+                ]]></rob:script>
+            </rob:script>
+        </rob:OpenJob>
+    </soapenv:Body>
+</soapenv:Envelope>
 ";
 
-            var content = new StringContent(soap, Encoding.UTF8, "text/xml");
+            /*var content = new StringContent(soap, Encoding.UTF8, "text/xml");
             content.Headers.ContentType = new MediaTypeHeaderValue("text/xml");
-            content.Headers.Add("SOAPAction", $"http://{Config.BaseURL}/OpenJob");
-            var resp = soapClient.PostAsync($"http://127.0.0.1:{port}", content).GetAwaiter().GetResult();
+            content.Headers.Add("SOAPAction", "OpenJob");
+            var resp = soapClient.PostAsync($"http://127.0.0.1:{port}", content).GetAwaiter().GetResult();*/
+            using var req = new HttpRequestMessage(HttpMethod.Post, $"http://127.0.0.1:{port}");
+            req.Content = new StringContent(soap, Encoding.UTF8, "text/xml");
+            req.Headers.Accept.ParseAdd("text/xml");
+            req.Headers.Add("SOAPAction", "OpenJob");
+            var resp = soapClient.SendAsync(req).GetAwaiter().GetResult();
 
             if (category == 2) // category 2 is for renders
             {
                 string response = resp.Content.ReadAsStringAsync().GetAwaiter().GetResult();
 
-                render = ExtractXML(response, category);
+                render = ExtractXML(response);
 
                 if (render == null)
-                    Logger.Error("RCCService returned no value for render");
+                    Logger.Error("RCCService failed to render (missing Value)");
             }
 
-            Logger.Info(resp.IsSuccessStatusCode ? $"{jobId} opened" : $"{jobId} errored ({resp.StatusCode})");
+            string responseText = resp.Content.ReadAsStringAsync().GetAwaiter().GetResult();
+
+            if (!resp.IsSuccessStatusCode)
+            {
+                Logger.Error($"{jobId} errored ({(int)resp.StatusCode} {resp.StatusCode})\n" + responseText);
+            }
 
             return resp.IsSuccessStatusCode;
         }

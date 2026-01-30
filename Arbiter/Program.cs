@@ -7,6 +7,9 @@ public class Program
         try
         {
             Config.Parse(args);
+            Logger.Info($"loaded {Config.GSScript.Length} bytes from gameserver script");
+            Logger.Info($"loaded {Config.RScript.Length} bytes from place/model render script");
+            Logger.Info($"loaded {Config.RAScript.Length} bytes from avatar render script");
             Logger.Info("Config read");
         }
         catch (Exception ex)
@@ -49,7 +52,7 @@ public class Program
             Logger.Warn($"Received a gameserver request from {clientIp}, creating gameserver job={jobId} place={body.PlaceId} port={port}");
 
             if (!Helpers.StartGameserver(jobId, port, body.PlaceId, out int pid, out string? render))
-                return Results.Problem("RCCService OpenJob failed");
+                return Results.Problem("RCCService couldn't execute OpenJob");
 
             return Results.Json(new { status = "ready", jobId, port, pid});
         });
@@ -57,7 +60,7 @@ public class Program
         app.MapPost("/api/v1/gameserver/kill", (KillRequest req) =>
         {
             if (!Helpers.KillbyID(req.pid))
-                return Results.NotFound(new { error = "process_not_found" });
+                return Results.NotFound(new { error = "notfound" });
 
             return Results.Ok(new { status = "killed", pid = req.pid });
         });
@@ -101,13 +104,13 @@ public class Program
             Logger.Warn($"Received an avatar render request from {clientIp}, job={jobId} port={port}");
 
             if (!Helpers.ARender(jobId, port, body.UserId, out int pid, out string? render))
-                return Results.Problem("RCCService OpenJob failed");
+                return Results.Problem("RCCService couldn't execute OpenJob");
 
             if (render == null)
                 return Results.Problem("RCCService failed to render");
 
             if (!Helpers.KillbyID(pid))
-                return Results.NotFound(new { error = "process_not_found" });
+                return Results.NotFound(new { error = "notfound" });
 
             return Results.Json(new
             {
@@ -126,7 +129,7 @@ public class Program
             var body = await JsonSerializer.DeserializeAsync<RenderRequest>(req.Body, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
             if (body == null || body.PlaceId <= 0)
-                return Results.BadRequest(new { error = "bad_request" });
+                return Results.BadRequest(new { error = "badrequest" });
 
             string jobId = Guid.NewGuid().ToString();
             int port = Helpers.GetPort();
@@ -136,13 +139,13 @@ public class Program
             Logger.Warn($"Received an place render request from {clientIp}, job={jobId} port={port}");
 
             if (!Helpers.Render(jobId, port, body.PlaceId, out int pid, out string? render))
-                return Results.Problem("RCCService OpenJob failed");
+                return Results.Problem("RCCService couldn't execute OpenJob");
 
             if (render == null)
                 return Results.Problem("RCCService failed to render");
 
             if (!Helpers.KillbyID(pid))
-                return Results.NotFound(new { error = "process_not_found" });
+                return Results.NotFound(new { error = "notfound" });
 
             return Results.Json(new
             {

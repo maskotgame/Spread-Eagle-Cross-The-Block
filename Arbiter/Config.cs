@@ -58,7 +58,7 @@ static class Config
                     if (!File.Exists(pathnumberthree))
                         throw new FileNotFoundException("avatar render script not found", pathnumberthree);
 
-                    RScript = File.ReadAllText(pathnumberthree);
+                    RAScript = File.ReadAllText(pathnumberthree);
                     break;
 
                 case "--baseurl":
@@ -79,7 +79,7 @@ static class Config
                     if (i + 1 >= args.Length)
                         throw new ArgumentException("--cores requires a value");
 
-                    port = int.Parse(args[++i]); // why are we parsing for this
+                    cores = int.Parse(args[++i]); // why are we parsing for this
                     break;
             }
         }
