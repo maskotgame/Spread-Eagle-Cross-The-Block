@@ -7,6 +7,7 @@ public class Program
         try
         {
             Config.Parse(args);
+            Logger.Info("Config read");
         }
         catch (Exception ex)
         {
@@ -32,16 +33,11 @@ public class Program
 
         app.MapPost("/api/v1/gameserver", async (HttpRequest req) =>
         {
-            if (!req.Headers.TryGetValue("Authorization", out var auth) ||
-                !Helpers.IsAuthorized(auth!))
-            {
+            if (!req.Headers.TryGetValue("Authorization", out var auth) || !Helpers.IsAuthorized(auth!)) {
                 return Results.Json(new { error = "unauthorized" }, statusCode: 401);
             }
 
-            var body = await JsonSerializer.DeserializeAsync<GameserverRequest>(
-                req.Body,
-                new JsonSerializerOptions { PropertyNameCaseInsensitive = true }
-            );
+            var body = await JsonSerializer.DeserializeAsync<GameserverRequest>(req.Body, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
             if (body == null || body.PlaceId <= 0)
                 return Results.BadRequest(new { error = "invalid_request" });
@@ -52,7 +48,7 @@ public class Program
 
             Logger.Warn($"Received a gameserver request from {clientIp}, creating gameserver job={jobId} place={body.PlaceId} port={port}");
 
-            if (!Helpers.StartGameserver(jobId, port, body.PlaceId, out int pid))
+            if (!Helpers.StartGameserver(jobId, port, body.PlaceId, out int pid, out string? render))
                 return Results.Problem("RCCService OpenJob failed");
 
             return Results.Json(new { status = "ready", jobId, port, pid});
@@ -88,58 +84,72 @@ public class Program
 
         app.MapPost("/api/v1/avatar-render", async (HttpRequest req) =>
         {
-            if (!req.Headers.TryGetValue("Authorization", out var auth) ||
-                !Helpers.IsAuthorized(auth!))
-            {
+            if (!req.Headers.TryGetValue("Authorization", out var auth) || !Helpers.IsAuthorized(auth!)) {
                 return Results.Json(new { error = "unauthorized" }, statusCode: 401);
             }
 
-            var body = await JsonSerializer.DeserializeAsync<ARenderRequest>(
-                req.Body,
-                new JsonSerializerOptions { PropertyNameCaseInsensitive = true }
-            );
+            var body = await JsonSerializer.DeserializeAsync<ARenderRequest>(req.Body, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
             if (body == null || body.UserId <= 0)
-                return Results.BadRequest(new { error = "invalid_request" });
+                return Results.BadRequest(new { error = "bad_request" });
 
             string jobId = Guid.NewGuid().ToString();
             int port = Helpers.GetPort();
+
             var clientIp = req.Headers.TryGetValue("X-Forwarded-For", out var forwarded) ? forwarded.ToString().Split(',')[0].Trim() : req.HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
 
-            Logger.Warn($"Received an avatar render request from {clientIp}, drawing render job={jobId} port={port}");
+            Logger.Warn($"Received an avatar render request from {clientIp}, job={jobId} port={port}");
 
-            if (!Helpers.ARender(jobId, port, body.UserId, out int pid))
+            if (!Helpers.ARender(jobId, port, body.UserId, out int pid, out string? render))
                 return Results.Problem("RCCService OpenJob failed");
 
-            return Results.Json(new { status = "ready", jobId, port, pid });
+            if (render == null)
+                return Results.Problem("RCCService failed to render");
+
+            if (!Helpers.KillbyID(pid))
+                return Results.NotFound(new { error = "process_not_found" });
+
+            return Results.Json(new
+            {
+                jobId,
+                pid,
+                base64 = render
+            });
         });
 
         app.MapPost("/api/v1/place-render", async (HttpRequest req) =>
         {
-            if (!req.Headers.TryGetValue("Authorization", out var auth) ||
-                !Helpers.IsAuthorized(auth!))
-            {
+            if (!req.Headers.TryGetValue("Authorization", out var auth) || !Helpers.IsAuthorized(auth!)) {
                 return Results.Json(new { error = "unauthorized" }, statusCode: 401);
             }
 
-            var body = await JsonSerializer.DeserializeAsync<RenderRequest>(
-                req.Body,
-                new JsonSerializerOptions { PropertyNameCaseInsensitive = true }
-            );
+            var body = await JsonSerializer.DeserializeAsync<RenderRequest>(req.Body, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
             if (body == null || body.PlaceId <= 0)
-                return Results.BadRequest(new { error = "invalid_request" });
+                return Results.BadRequest(new { error = "bad_request" });
 
             string jobId = Guid.NewGuid().ToString();
             int port = Helpers.GetPort();
+
             var clientIp = req.Headers.TryGetValue("X-Forwarded-For", out var forwarded) ? forwarded.ToString().Split(',')[0].Trim() : req.HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
 
-            Logger.Warn($"Received an place render request from {clientIp}, drawing render job={jobId} port={port}");
+            Logger.Warn($"Received an place render request from {clientIp}, job={jobId} port={port}");
 
-            if (!Helpers.Render(jobId, port, body.PlaceId, out int pid))
+            if (!Helpers.Render(jobId, port, body.PlaceId, out int pid, out string? render))
                 return Results.Problem("RCCService OpenJob failed");
 
-            return Results.Json(new { status = "ready", jobId, port, pid });
+            if (render == null)
+                return Results.Problem("RCCService failed to render");
+
+            if (!Helpers.KillbyID(pid))
+                return Results.NotFound(new { error = "process_not_found" });
+
+            return Results.Json(new
+            {
+                jobId,
+                pid,
+                base64 = render
+            });
         });
         app.Run("http://0.0.0.0:7000");
     }

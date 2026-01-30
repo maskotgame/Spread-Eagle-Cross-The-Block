@@ -5,6 +5,7 @@ using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
+using System.Xml.Linq;
 
 static class Helpers
 {
@@ -32,6 +33,20 @@ static class Helpers
         {
             return false;
         }
+    }
+
+    static string? ExtractXML(string soapResponse, int category)
+    {
+        if (category != 2)
+            return null;
+
+        var doc = XDocument.Parse(soapResponse);
+
+        XNamespace ns1 = "http://{Config.BaseURL}/";
+
+        var valueElement = doc.Descendants(ns1 + "value").FirstOrDefault();
+
+        return valueElement?.Value.Trim();
     }
 
     private static bool IsPortBindable(int port)
@@ -76,9 +91,10 @@ static class Helpers
         return port;
     }
 
-    public static bool Render(string jobId, int port, int placeId, out int pid)
+    public static bool Render(string jobId, int port, int placeId, out int pid, out string? render)
     {
         pid = -1;
+        render = null;
 
         var proc = RCCService(port);
         if (proc == null)
@@ -92,7 +108,7 @@ static class Helpers
             return false;
         }
 
-        if (!SOAP(jobId, port, placeId, Config.RScript, 1, 2))
+        if (!SOAP(jobId, port, placeId, Config.RScript, 1, 2, out render))
         {
             Kill(proc);
             return false;
@@ -102,9 +118,10 @@ static class Helpers
         return true;
     }
 
-    public static bool ARender(string jobId, int port, int placeId, out int pid)
+    public static bool ARender(string jobId, int port, int placeId, out int pid, out string? render)
     {
         pid = -1;
+        render = null;
 
         var proc = RCCService(port);
         if (proc == null)
@@ -118,7 +135,7 @@ static class Helpers
             return false;
         }
 
-        if (!SOAP(jobId, port, placeId, Config.RAScript, 1, 2))
+        if (!SOAP(jobId, port, placeId, Config.RAScript, 1, 2, out render))
         {
             Kill(proc);
             return false;
@@ -128,9 +145,10 @@ static class Helpers
         return true;
     }
 
-    public static bool StartGameserver(string jobId, int port, int placeId, out int pid)
+    public static bool StartGameserver(string jobId, int port, int placeId, out int pid, out string? render)
     {
         pid = -1;
+        render = null;
 
         var proc = RCCService(port);
         if (proc == null)
@@ -144,7 +162,7 @@ static class Helpers
             return false;
         }
 
-        if (!SOAP(jobId, port, placeId, Config.GSScript, 604800, 1))
+        if (!SOAP(jobId, port, placeId, Config.GSScript, 604800, 1, out render))
         {
             Kill(proc);
             return false;
@@ -207,8 +225,9 @@ static class Helpers
         return true;
     }
 
-    private static bool SOAP(string jobId, int port, int placeId, string type, int howlonguntilwedie, int category)
+    private static bool SOAP(string jobId, int port, int placeId, string type, int howlonguntilwedie, int category, out string? render)
     {
+        render = null;
         try
         {
             using var soapClient = new HttpClient
@@ -241,6 +260,16 @@ static class Helpers
             content.Headers.ContentType = new MediaTypeHeaderValue("text/xml");
             content.Headers.Add("SOAPAction", $"http://{Config.BaseURL}/OpenJob");
             var resp = soapClient.PostAsync($"http://127.0.0.1:{port}", content).GetAwaiter().GetResult();
+
+            if (category == 2) // category 2 is for renders
+            {
+                string response = resp.Content.ReadAsStringAsync().GetAwaiter().GetResult();
+
+                render = ExtractXML(response, category);
+
+                if (render == null)
+                    Logger.Error("RCCService returned no value for render");
+            }
 
             Logger.Info(resp.IsSuccessStatusCode ? $"{jobId} opened" : $"{jobId} errored ({resp.StatusCode})");
 

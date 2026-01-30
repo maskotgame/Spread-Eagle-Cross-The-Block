@@ -88,6 +88,5 @@ static class Config
         {
             RCCDirectory = AppContext.BaseDirectory;
         }
-        Logger.Info("Config read");
     }
 }
