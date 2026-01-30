@@ -134,7 +134,7 @@ public class Program
             int port = Helpers.GetPort();
             var clientIp = req.Headers.TryGetValue("X-Forwarded-For", out var forwarded) ? forwarded.ToString().Split(',')[0].Trim() : req.HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
 
-            Logger.Warn($"Received an avatar render request from {clientIp}, drawing render job={jobId} port={port}");
+            Logger.Warn($"Received an place render request from {clientIp}, drawing render job={jobId} port={port}");
 
             if (!Helpers.Render(jobId, port, body.PlaceId, out int pid))
                 return Results.Problem("RCCService OpenJob failed");
