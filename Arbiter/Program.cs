@@ -205,7 +205,7 @@ public class Program
 
             using var resourceStream = assembly.GetManifestResourceStream(chosen);
             if (resourceStream == null)
-                return Results.NotFound("Couldn't load video");
+                return Results.Problem("Couldn't load video");
 
             var ms = new MemoryStream();
             resourceStream.CopyTo(ms);
