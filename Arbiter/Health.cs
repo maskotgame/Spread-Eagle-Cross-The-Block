@@ -4,8 +4,7 @@ using System.Runtime.InteropServices;
 
 static class Health
 {
-    private static readonly bool IsWindows =
-        RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
+    private static readonly bool IsWindows = RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
 
     public static float GetRAM()
     {

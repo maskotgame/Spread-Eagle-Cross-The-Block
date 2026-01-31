@@ -47,7 +47,7 @@ public class Program
                 return Results.BadRequest(new { error = "invalid_request" });
 
             string jobId = Guid.NewGuid().ToString();
-            int port = Helpers.GetPort();
+            int port = Helpers.GetGameServerPort();
             var clientIp = req.Headers.TryGetValue("X-Forwarded-For", out var forwarded) ? forwarded.ToString().Split(',')[0].Trim() : req.HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
 
             Logger.Warn($"Received a gameserver request from {clientIp}, creating gameserver job={jobId} place={body.PlaceId} port={port}");

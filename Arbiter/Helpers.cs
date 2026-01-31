@@ -72,9 +72,14 @@ static class Helpers
     public static int GetPort()
     {
         var r = new Random();
-        int port;
-        do port = r.Next(20000, 60000);
-        while (port == 3306);
+        int port = r.Next(64000, 64989);
+        return port;
+    }
+
+    public static int GetGameServerPort()
+    {
+        var r = new Random();
+        int port = r.Next(60000, 64000);
         return port;
     }
 
