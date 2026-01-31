@@ -1,4 +1,5 @@
 ﻿using System.Diagnostics;
+using System.Diagnostics.Eventing.Reader;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Sockets;
@@ -33,15 +34,6 @@ static class Helpers
         {
             return false;
         }
-    }
-
-    static string? ExtractXML(string soapResponse)
-    {
-        var doc = XDocument.Parse(soapResponse);
-
-        var valueElement = doc.Descendants().FirstOrDefault(e => e.Name.LocalName == "value");
-
-        return valueElement?.Value.Trim();
     }
 
 
@@ -103,13 +95,13 @@ static class Helpers
             return false;
         }
 
-        if (!SOAP(jobId, port, placeId, Config.RScript, 1, 2, out render))
+        Logger.Info($"{jobId} started (pid={pid})");
+
+        if (!SOAP(jobId, port, placeId, Config.RScript, 60, 2, out render))
         {
             Kill(proc);
             return false;
         }
-
-        Logger.Info($"{jobId} started (pid={pid})");
         return true;
     }
 
@@ -130,13 +122,13 @@ static class Helpers
             return false;
         }
 
-        if (!SOAP(jobId, port, placeId, Config.RAScript, 1, 2, out render))
+        Logger.Info($"{jobId} started (pid={pid})");
+
+        if (!SOAP(jobId, port, placeId, Config.RAScript, 60, 2, out render))
         {
             Kill(proc);
             return false;
         }
-
-        Logger.Info($"{jobId} started (pid={pid})");
         return true;
     }
 
@@ -222,7 +214,7 @@ static class Helpers
 
         using var client = new HttpClient
         {
-            Timeout = TimeSpan.FromSeconds(5)
+            Timeout = TimeSpan.FromSeconds(30) // better safe than sorry
         };
 
         while (sw.ElapsedMilliseconds < timeoutMs)
@@ -247,74 +239,75 @@ static class Helpers
     }
 
 
-    private static bool SOAP(string jobId, int port, int placeId, string type, int howlonguntilwedie, int category, out string? render)
-    {
+    private static bool SOAP(string jobId, int port, int placeId, string type, int howlonguntilwedie, int category, out string? render) {
         render = null;
         try
         {
-            using var soapClient = new HttpClient
+            using var client = new HttpClient
             {
-                Timeout = TimeSpan.FromSeconds(60)
+                Timeout = Timeout.InfiniteTimeSpan
             };
 
-            soapClient.DefaultRequestHeaders.Host = $"127.0.0.1:{port}";
+            client.DefaultRequestHeaders.Host = $"127.0.0.1:{port}";
 
-            string soap = $@"<soapenv:Envelope xmlns:soapenv=""http://schemas.xmlsoap.org/soap/envelope/"" xmlns:rob=""http://{Config.BaseURL}/"">
-	<soapenv:Body>
-        <rob:OpenJob>
-            <rob:job>
-                <rob:id>{jobId}</rob:id>
-                <rob:expirationInSeconds>{howlonguntilwedie}</rob:expirationInSeconds>
-                <rob:cores>{Config.cores}</rob:cores>
-            </rob:job>
-            <rob:script>
-                <rob:name>GameScript</rob:name>
-                <rob:script><![CDATA[
-                    {type}
-                ]]></rob:script>
-            </rob:script>
-        </rob:OpenJob>
-    </soapenv:Body>
-</soapenv:Envelope>
-";
+            var soap = $@"<?xml version=""1.0"" encoding=""utf-8""?>
+<soapenv:Envelope xmlns:soapenv=""http://schemas.xmlsoap.org/soap/envelope/""
+                  xmlns:rob=""http://{Config.BaseURL}/"">
+<soapenv:Body>
+  <rob:OpenJob>
+    <rob:job>
+      <rob:id>{jobId}</rob:id>
+      <rob:expirationInSeconds>{howlonguntilwedie}</rob:expirationInSeconds>
+      <rob:cores>{Config.cores}</rob:cores>
+    </rob:job>
+    <rob:script>
+      <rob:name>{jobId}-Script</rob:name>
+      <rob:script><![CDATA[
+{type}
+      ]]></rob:script>
+    </rob:script>
+  </rob:OpenJob>
+</soapenv:Body>
+</soapenv:Envelope>";
 
-            /*var content = new StringContent(soap, Encoding.UTF8, "text/xml");
-            content.Headers.ContentType = new MediaTypeHeaderValue("text/xml");
-            content.Headers.Add("SOAPAction", "OpenJob");
-            var resp = soapClient.PostAsync($"http://127.0.0.1:{port}", content).GetAwaiter().GetResult();*/
             using var req = new HttpRequestMessage(HttpMethod.Post, $"http://127.0.0.1:{port}");
             req.Content = new StringContent(soap, Encoding.UTF8, "text/xml");
-            req.Headers.Accept.ParseAdd("text/xml");
             req.Headers.Add("SOAPAction", "OpenJob");
-            var resp = soapClient.SendAsync(req).GetAwaiter().GetResult();
 
-            if (category == 2) // category 2 is for renders
+            using var resp = client.SendAsync(req, HttpCompletionOption.ResponseHeadersRead).GetAwaiter().GetResult();
+
+            using var stream = resp.Content.ReadAsStream();
+            using var reader = new StreamReader(stream, Encoding.UTF8);
+
+            var responseText = reader.ReadToEnd();
+
+            if (string.IsNullOrWhiteSpace(responseText))
+                return resp.IsSuccessStatusCode;
+
+            if (category == 2)
             {
-                string response = resp.Content.ReadAsStringAsync().GetAwaiter().GetResult();
+                try
+                {
+                    var doc = XDocument.Parse(responseText);
+                    var value = doc.Descendants().FirstOrDefault(e => e.Name.LocalName == "value");
 
-                Thread.Sleep(2000); // delay because roblox rccservice is a fucking chud
-
-                render = ExtractXML(response);
-
-                if (render == null)
-                    Logger.Error("RCCService failed to render (missing Value)");
-            }
-
-            string responseText = resp.Content.ReadAsStringAsync().GetAwaiter().GetResult();
-
-            if (!resp.IsSuccessStatusCode)
-            {
-                Logger.Error($"{jobId} errored ({(int)resp.StatusCode} {resp.StatusCode})\n" + responseText);
+                    render = value?.Value;
+                }
+                catch (Exception ex)
+                {
+                    Logger.Error("Couldn't parse XML: " + ex.Message);
+                }
             }
 
             return resp.IsSuccessStatusCode;
         }
         catch (Exception ex)
         {
-            Logger.Error($"SOAP error: {ex.Message}");
+            Logger.Error("SOAP error: " + ex);
             return false;
         }
     }
+
 
     private static void Kill(Process proc)
     {
