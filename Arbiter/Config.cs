@@ -15,18 +15,18 @@ static class Config
         {
             switch (args[i])
             {
-                case "--dir":
+                case "--dir": // path for rccservice
                     if (i + 1 >= args.Length)
                         throw new ArgumentException("--dir requires a value");
 
                     RCCDirectory = args[++i];
                     break;
 
-                case "--skip-sysstats":
+                case "--skip-sysstats": // skip anti skid
                     SkipSysStats = true;
                     break;
 
-                case "--gscript":
+                case "--gscript": // gameserver script
                     if (i + 1 >= args.Length)
                         throw new ArgumentException("--gscript requires a value");
 
@@ -38,7 +38,7 @@ static class Config
                     GSScript = File.ReadAllText(path);
                     break;
 
-                case "--rscript":
+                case "--rscript": // render script
                     if (i + 1 >= args.Length)
                         throw new ArgumentException("--rscript requires a value");
 
@@ -50,7 +50,7 @@ static class Config
                     RScript = File.ReadAllText(pathnumbertwo);
                     break;
 
-                case "--rascript":
+                case "--rascript": // avatar render script
                     if (i + 1 >= args.Length)
                         throw new ArgumentException("--rascript requires a value");
 
@@ -62,7 +62,7 @@ static class Config
                     RAScript = File.ReadAllText(pathnumberthree);
                     break;
 
-                case "--rmscript":
+                case "--rmscript": // model render script
                     if (i + 1 >= args.Length)
                         throw new ArgumentException("--rmscript requires a value");
 
@@ -74,21 +74,21 @@ static class Config
                     RMScript = File.ReadAllText(pathnumberfour);
                     break;
 
-                case "--baseurl":
+                case "--baseurl": // baseURL for soap
                     if (i + 1 >= args.Length)
                         throw new ArgumentException("--baseurl requires a value");
 
                     BaseURL = args[++i];
                     break;
 
-                case "--port":
+                case "--port": // what port to listen on
                     if (i + 1 >= args.Length)
                         throw new ArgumentException("--port requires a value");
 
                     port = int.Parse(args[++i]); // why are we parsing for this
                     break;
 
-                case "--cores":
+                case "--cores": // how much cpu cores should we use for RCCService
                     if (i + 1 >= args.Length)
                         throw new ArgumentException("--cores requires a value");
 
@@ -99,6 +99,7 @@ static class Config
 
         if (string.IsNullOrWhiteSpace(RCCDirectory) || !Directory.Exists(RCCDirectory))
         {
+            // I GUESS WE'LL JUST SET OUR OWN
             RCCDirectory = AppContext.BaseDirectory;
         }
     }
