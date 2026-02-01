@@ -10,7 +10,6 @@ using System.Xml.Linq;
 
 static class Helpers
 {
-    private const string SECRET = "my-mother-ate-fries-lol";
 
     public static bool SysStats()
     {
@@ -66,7 +65,7 @@ static class Helpers
         using var sha = SHA256.Create();
 
         var expected = Convert.ToHexString(
-            sha.ComputeHash(Encoding.UTF8.GetBytes(SECRET))
+            sha.ComputeHash(Encoding.UTF8.GetBytes(Config.SECRET))
         );
 
         return CryptographicOperations.FixedTimeEquals(

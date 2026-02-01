@@ -10,6 +10,8 @@ static class Config
     public static int port { get; private set; } = 7000;
     public static int cores { get; private set; } = 1;
     public static bool debug { get; private set; } = false;
+    public static string SECRET = "my-mother-ate-fries-lol";
+    public static string FakeSECRET = "";
     public static void Parse(string[] args)
     {
         for (int i = 0; i < args.Length; i++)
@@ -98,6 +100,14 @@ static class Config
 
                 case "--debug": // debug mode (more information)
                     debug = true;
+                    break;
+
+                case "--secret": // access key for apis
+                    if (i + 1 >= args.Length)
+                        throw new ArgumentException("--secret requires a value");
+
+                    FakeSECRET = args[++i];
+                    SECRET = args[++i];
                     break;
             }
         }

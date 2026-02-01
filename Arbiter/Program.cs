@@ -26,6 +26,8 @@ public class Program
             Config.Parse(args);
             if (Config.debug)
             {
+                Logger.Info($"Access key read: {Config.FakeSECRET}");
+                Logger.Info($"Current Access key: {Config.SECRET}");
                 Logger.Info($"Loaded {Config.GSScript.Length} bytes from gameserver script");
                 Logger.Info($"Loaded {Config.RScript.Length} bytes from place/model render script");
                 Logger.Info($"Loaded {Config.RAScript.Length} bytes from avatar render script");
