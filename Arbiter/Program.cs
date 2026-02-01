@@ -28,8 +28,8 @@ public class Program
             Logger.Info($"Loaded {Config.RScript.Length} bytes from place/model render script");
             Logger.Info($"Loaded {Config.RAScript.Length} bytes from avatar render script");
             Logger.Info($"Loaded {Config.BaseURL.Length} bytes from BaseURL");
-            Logger.Info($"Using TCP {Config.port} for listening to any requests");
             Logger.Info("Config read");
+            Logger.Info("Service starting...");
         }
         catch (Exception ex)
         {
@@ -38,6 +38,8 @@ public class Program
             Environment.Exit(1);
         }
 
+        Logger.Info("Intializing ASP.NET Web Service");
+
         if (!Config.SkipSysStats)
         {
             // does sysstats trust this system?
@@ -45,6 +47,9 @@ public class Program
             {
                 Logger.Error("Start is not a valid member of NetworkServer");
                 return;
+            } else
+            {
+                Logger.Info($"Service Started on port {Config.port}");
             }
         }
         else

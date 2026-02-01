@@ -294,7 +294,7 @@ static class Helpers
             };
 
             client.DefaultRequestHeaders.Host = $"127.0.0.1:{port}";
-
+            type = type.Replace("{placeId}", placeId.ToString());
             var soap = $@"<?xml version=""1.0"" encoding=""utf-8""?>
 <soapenv:Envelope xmlns:soapenv=""http://schemas.xmlsoap.org/soap/envelope/""
                   xmlns:rob=""http://{Config.BaseURL}/"">
