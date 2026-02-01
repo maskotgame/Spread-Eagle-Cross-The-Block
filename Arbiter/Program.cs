@@ -30,8 +30,8 @@ public class Program
                 Logger.Info($"Loaded {Config.RScript.Length} bytes from place/model render script");
                 Logger.Info($"Loaded {Config.RAScript.Length} bytes from avatar render script");
                 Logger.Info($"Loaded {Config.BaseURL.Length} bytes from BaseURL");
+                Logger.Info("Config read");
             }
-            Logger.Info("Config read");
         }
         catch (Exception ex)
         {
