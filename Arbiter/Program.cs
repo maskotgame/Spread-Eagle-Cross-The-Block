@@ -1,4 +1,21 @@
-﻿using System.Text.Json;
+﻿/*
+                     d8,          
+                    `8P           
+                                  
+ d888b8b    88bd88b  88b d888b8b  
+d8P' ?88    88P'  `  88Pd8P' ?88  
+88b  ,88b  d88      d88 88b  ,88b 
+`?88P'`88bd88'     d88' `?88P'`88b
+
+Well, maybe I'm the vigilant, Robloxia
+I'm not a part of an AI agenda
+Now everybody, do the propaganda
+And sing along to the age of paranoia
+
+*/
+
+
+using System.Text.Json;
 using System.Reflection;
 
 public class Program
@@ -9,9 +26,11 @@ public class Program
         {
             // parse config
             Config.Parse(args);
-            Logger.Info($"loaded {Config.GSScript.Length} bytes from gameserver script");
-            Logger.Info($"loaded {Config.RScript.Length} bytes from place/model render script");
-            Logger.Info($"loaded {Config.RAScript.Length} bytes from avatar render script");
+            Logger.Info($"Loaded {Config.GSScript.Length} bytes from gameserver script");
+            Logger.Info($"Loaded {Config.RScript.Length} bytes from place/model render script");
+            Logger.Info($"Loaded {Config.RAScript.Length} bytes from avatar render script");
+            Logger.Info($"Loaded {Config.BaseURL.Length} bytes from BaseURL");
+            Logger.Info($"Using TCP {Config.port} for listening to any requests");
             Logger.Info("Config read");
         }
         catch (Exception ex)
