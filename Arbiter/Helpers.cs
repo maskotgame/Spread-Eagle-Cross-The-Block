@@ -317,7 +317,7 @@ static class Helpers
 
             if (type == Config.RAScript && placeId == 53)
             {
-                Logger.Warn("Im not rendering this avatar bro");
+                Logger.Warn("Im not rendering this avatar bro"); // I HATE YOU!!!!! DIE!!!!!!
                 return false;
             }
 
