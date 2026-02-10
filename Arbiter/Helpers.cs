@@ -238,7 +238,7 @@ static class Helpers
 
         fakeahport = GetGameServerPort();
 
-        if (!SOAP(jobId, port, placeId, Config.GSScript, 604800, 1, out render, false, fakeahport))
+        if (!SOAP(jobId, port, placeId, Config.GSScript, 604800, 1, out render, teamcreate, fakeahport))
         {
             Logger.Info($"{jobId} SOAP action failed");
             Kill(proc);
