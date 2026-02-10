@@ -79,17 +79,17 @@ public class Program
 
             // do a bunch of variations..
             string jobId = Guid.NewGuid().ToString();
-            int port = Helpers.GetGameServerPort();
+            int port = Helpers.GetPort();
             // get client's ip for logging
             var clientIP = req.Headers.TryGetValue("X-Forwarded-For", out var forwarded) ? forwarded.ToString().Split(',')[0].Trim() : req.HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
 
             Logger.Warn($"Received a gameserver request from {clientIP}, creating gameserver job={jobId} place={body.PlaceId} port={port}");
 
             // start the gameserver!
-            if (!Helpers.StartGameserver(jobId, port, body.PlaceId, out int pid, out string? render))
+            if (Helpers.StartGameserver(jobId, port, body.PlaceId, out int pid, out string? render, body.TeamCreate, out int fakeahport) == 0)
                 return Results.Problem("RCCService couldn't execute OpenJob");
 
-            return Results.Json(new { status = "ready", jobId, port, pid});
+            return Results.Json(new { status = "ready", jobId, fakeahport, pid});
         });
 
         app.MapPost("/api/v1/gameserver/kill", (HttpRequest http, KillRequest req) =>
@@ -360,7 +360,7 @@ public class Program
 public record RenderRequest(int PlaceId);
 public record ARenderRequest(int UserId);
 public record MRenderRequest(int AssetID);
-public record GameserverRequest(int PlaceId);
+public record GameserverRequest(int PlaceId, bool TeamCreate);
 public record KillRequest(int pid);
 public record GSMJob
 {

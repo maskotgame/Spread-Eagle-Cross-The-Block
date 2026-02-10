@@ -144,7 +144,7 @@ static class Helpers
             Logger.Info($"{jobId} started (pid={pid})");
         }
 
-        if (!SOAP(jobId, port, placeId, Config.RScript, 60, 2, out render))
+        if (!SOAP(jobId, port, placeId, Config.RScript, 60, 2, out render, false, 53640))
         {
             Kill(proc);
             return false;
@@ -174,7 +174,7 @@ static class Helpers
             Logger.Info($"{jobId} started (pid={pid})");
         }
 
-        if (!SOAP(jobId, port, placeId, Config.RAScript, 60, 2, out render))
+        if (!SOAP(jobId, port, placeId, Config.RAScript, 60, 2, out render, false, 53640))
         {
             Kill(proc);
             return false;
@@ -204,7 +204,7 @@ static class Helpers
             Logger.Info($"{jobId} started (pid={pid})");
         }
 
-        if (!SOAP(jobId, port, placeId, Config.RMScript, 60, 2, out render))
+        if (!SOAP(jobId, port, placeId, Config.RMScript, 60, 2, out render, false, 53640))
         {
             Kill(proc);
             return false;
@@ -212,21 +212,22 @@ static class Helpers
         return true;
     }
 
-    public static bool StartGameserver(string jobId, int port, int placeId, out int pid, out string? render)
+    public static int StartGameserver(string jobId, int port, int placeId, out int pid, out string? render, bool teamcreate, out int fakeahport)
     {
         pid = -1;
         render = null;
+        fakeahport = 0;
 
         var proc = RCCService(port);
         if (proc == null)
-            return false;
+            return 0;
 
         pid = proc.Id;
 
         if (!AwaitRCCService(port, timeoutMs: 8000))
         {
             Kill(proc);
-            return false;
+            return 0;
         }
 
         if (Config.debug)
@@ -234,11 +235,13 @@ static class Helpers
             Logger.Info($"{jobId} started (pid={pid})");
         }
 
-        if (!SOAP(jobId, port, placeId, Config.GSScript, 604800, 1, out render))
+        fakeahport = GetGameServerPort();
+
+        if (!SOAP(jobId, port, placeId, Config.GSScript, 604800, 1, out render, false, fakeahport))
         {
             Logger.Info($"{jobId} SOAP action failed");
             Kill(proc);
-            return false;
+            return 0;
         }
 
         lock (JobsLock)
@@ -256,8 +259,7 @@ static class Helpers
             };
         }
 
-
-        return true;
+        return fakeahport;
     }
 
     private static Process? RCCService(int port)
@@ -356,7 +358,7 @@ static class Helpers
     }
 
 
-    private static bool SOAP(string jobId, int port, int placeId, string type, int howlonguntilwedie, int category, out string? render) {
+    private static bool SOAP(string jobId, int port, int placeId, string type, int howlonguntilwedie, int category, out string? render, bool teamcreate, int fakeahport) {
         render = null;
         Thread.Sleep(250);
         try
@@ -373,9 +375,12 @@ static class Helpers
 
             client.DefaultRequestHeaders.Host = $"127.0.0.1:{port}";
             type = type.Replace("{placeId}", placeId.ToString());
+            type = type.Replace("{jobId}", jobId.ToString());
+            type = type.Replace("{port}", fakeahport.ToString());
+            type = type.Replace("{accesskey}", Config.AccessKey.ToString());
+            type = type.Replace("{teamcreate}", teamcreate.ToString());
             var soap = $@"<?xml version=""1.0"" encoding=""utf-8""?>
-<soapenv:Envelope xmlns:soapenv=""http://schemas.xmlsoap.org/soap/envelope/""
-                  xmlns:rob=""http://{Config.BaseURL}/"">
+<soapenv:Envelope xmlns:soapenv=""http://schemas.xmlsoap.org/soap/envelope/"" xmlns:rob=""http://{Config.BaseURL}/"">
 <soapenv:Body>
   <rob:OpenJob>
     <rob:job>

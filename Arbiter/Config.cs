@@ -11,6 +11,7 @@ static class Config
     public static int cores { get; private set; } = 1;
     public static bool debug { get; private set; } = false;
     public static string SECRET = "my-mother-ate-fries-lol";
+    public static string AccessKey = "my-mother-ate-fries-lol";
     public static string FakeSECRET = "";
     public static void Parse(string[] args)
     {
@@ -109,6 +110,13 @@ static class Config
                     i++;
                     SECRET = args[i];
                     FakeSECRET = SECRET;
+                    break;
+
+                case "--accesskey": // access key for gameserver
+                    if (i + 1 >= args.Length)
+                        throw new ArgumentException("--accesskey requires a value");
+
+                    AccessKey = args[++i];
                     break;
             }
         }
