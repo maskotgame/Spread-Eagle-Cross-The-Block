@@ -7,6 +7,7 @@ static class Config
     public static string RScript = "print('get a place render script nerd')";
     public static string RAScript = "print('get a avatar render script nerd')";
     public static string RMScript = "print('get a model render script nerd')";
+    public static string RMMScript = "print('get a mesh render script nerd')";
     public static int port { get; private set; } = 7000;
     public static int cores { get; private set; } = 1;
     public static bool debug { get; private set; } = false;
@@ -76,6 +77,18 @@ static class Config
                         throw new FileNotFoundException("model render script not found", pathnumberfour);
 
                     RMScript = File.ReadAllText(pathnumberfour);
+                    break;
+
+                case "--rmmscript": // model render script
+                    if (i + 1 >= args.Length)
+                        throw new ArgumentException("--rmmscript requires a value");
+
+                    var pathnumberfive = args[++i];
+
+                    if (!File.Exists(pathnumberfive))
+                        throw new FileNotFoundException("mesh render script not found", pathnumberfive);
+
+                    RMMScript = File.ReadAllText(pathnumberfive);
                     break;
 
                 case "--baseurl": // baseURL for soap

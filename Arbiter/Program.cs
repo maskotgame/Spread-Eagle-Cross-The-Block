@@ -223,7 +223,7 @@ public class Program
 
             var body = await JsonSerializer.DeserializeAsync<MRenderRequest>(req.Body, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
-            if (body == null || body.AssetID <= 0)
+            if (body == null || body.AssetId <= 0)
                 return Results.BadRequest(new { error = "badrequest" });
 
             string jobId = Guid.NewGuid().ToString();
@@ -233,7 +233,43 @@ public class Program
 
             Logger.Warn($"Received a model render request from {clientIP}, job={jobId} port={port}");
 
-            if (!Helpers.MRender(jobId, port, body.AssetID, out int pid, out string? render))
+            if (!Helpers.MRender(jobId, port, body.AssetId, out int pid, out string? render))
+                return Results.Problem("RCCService couldn't execute OpenJob");
+
+            if (render == null)
+                return Results.Problem("RCCService failed to render");
+
+            if (!Helpers.KillbyID(pid))
+                return Results.NotFound(new { error = "notfound" });
+
+            return Results.Json(new
+            {
+                jobId,
+                pid,
+                base64 = render
+            });
+        });
+
+        app.MapPost("/api/v1/mesh-render", async (HttpRequest req) =>
+        {
+            if (!req.Headers.TryGetValue("Authorization", out var auth) || !Helpers.IsAuthorized(auth!))
+            {
+                return Results.Json(new { error = "unauthorized" }, statusCode: 401);
+            }
+
+            var body = await JsonSerializer.DeserializeAsync<MMRenderRequest>(req.Body, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+            if (body == null || body.MeshId <= 0)
+                return Results.BadRequest(new { error = "badrequest" });
+
+            string jobId = Guid.NewGuid().ToString();
+            int port = Helpers.GetPort();
+
+            var clientIP = req.Headers.TryGetValue("X-Forwarded-For", out var forwarded) ? forwarded.ToString().Split(',')[0].Trim() : req.HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+
+            Logger.Warn($"Received a mesh render request from {clientIP}, job={jobId} port={port}");
+
+            if (!Helpers.MMRender(jobId, port, body.MeshId, out int pid, out string? render))
                 return Results.Problem("RCCService couldn't execute OpenJob");
 
             if (render == null)
@@ -359,7 +395,8 @@ public class Program
 // bunch of post data shit!
 public record RenderRequest(int PlaceId);
 public record ARenderRequest(int UserId);
-public record MRenderRequest(int AssetID);
+public record MRenderRequest(int AssetId);
+public record MMRenderRequest(int MeshId);
 public record GameserverRequest(int PlaceId, bool TeamCreate);
 public record KillRequest(int pid);
 public record GSMJob
