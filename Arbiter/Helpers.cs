@@ -135,6 +135,7 @@ static class Helpers
             using (var udp = new UdpClient(0))
             {
                 int port = ((IPEndPoint)udp.Client.LocalEndPoint).Port;
+
                 if (port >= 40000 && port <= 59999)
                 {
                     udp.Dispose();
