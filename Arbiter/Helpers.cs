@@ -464,7 +464,7 @@ static class Helpers
             type = type.Replace("{jobId}", jobId);
             type = type.Replace("{port}", fakeahport.ToString());
             type = type.Replace("{accesskey}", Config.AccessKey);
-            type = type.Replace("{teamcreate}", teamcreate.ToString());
+            type = type.Replace("{teamcreate}", teamcreate.ToString().ToLower());
             type = type.Replace("{isheadshot}", headshot.ToString().ToLower());
             type = type.Replace("{isclothing}", isclothing.ToString().ToLower());
 
