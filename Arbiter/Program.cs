@@ -156,6 +156,7 @@ public class Program
                 return Results.BadRequest(new { error = "badrequest" });
 
             bool headshot = body.IsHeadshot;
+            bool isclothing = body.IsClothing;
             string jobId = Guid.NewGuid().ToString();
             int port = Helpers.GetPort();
 
@@ -163,7 +164,7 @@ public class Program
 
             Logger.Warn($"Received an avatar render request from {clientIP}, job={jobId} port={port}");
 
-            if (!Helpers.ARender(jobId, port, body.UserId, out int pid, out string? render, headshot))
+            if (!Helpers.ARender(jobId, port, body.UserId, out int pid, out string? render, headshot, isclothing))
                 return Results.Problem("RCCService couldn't execute OpenJob");
 
             if (render == null)
