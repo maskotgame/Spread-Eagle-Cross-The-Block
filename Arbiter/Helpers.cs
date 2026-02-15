@@ -176,7 +176,7 @@ static class Helpers
         return true;
     }
 
-    public static bool ARender(string jobId, int port, int placeId, out int pid, out string? render, bool headshot)
+    public static bool ARender(string jobId, int port, int placeId, out int pid, out string? render, bool headshot, bool isclothing)
     {
         pid = -1;
         render = null;
@@ -198,7 +198,7 @@ static class Helpers
             Logger.Info($"{jobId} started (pid={pid})");
         }
 
-        if (!SOAP(jobId, port, placeId, Config.RAScript, 60, 2, out render, false, 53640, headshot))
+        if (!SOAP(jobId, port, placeId, Config.RAScript, 60, 2, out render, false, 53640, headshot, isclothing))
         {
             Kill(proc);
             return false;
