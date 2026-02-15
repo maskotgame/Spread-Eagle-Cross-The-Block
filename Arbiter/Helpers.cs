@@ -465,8 +465,8 @@ static class Helpers
             type = type.Replace("{port}", fakeahport.ToString());
             type = type.Replace("{accesskey}", Config.AccessKey);
             type = type.Replace("{teamcreate}", teamcreate.ToString());
-            type = type.Replace("{isheadshot}", headshot.ToString());
-            type = type.Replace("{isclothing}", isclothing.ToString());
+            type = type.Replace("{isheadshot}", headshot.ToString().ToLower());
+            type = type.Replace("{isclothing}", isclothing.ToString().ToLower());
 
             var soap = $@"<?xml version=""1.0"" encoding=""utf-8""?>
 <soapenv:Envelope xmlns:soapenv=""http://schemas.xmlsoap.org/soap/envelope/"" xmlns:rob=""http://{Config.BaseURL}/"">
