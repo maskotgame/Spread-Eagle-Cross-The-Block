@@ -464,6 +464,7 @@ static class Helpers
             if (type == Config.GSScript)
             {
                 type = File.ReadAllText(Config.whereisthedamnscriptat);
+                Config.GSScript = type;
             }
             type = type.Replace("{placeId}", placeId.ToString());
             type = type.Replace("{jobId}", jobId);
