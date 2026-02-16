@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Diagnostics;
+using System.IO;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Sockets;
@@ -460,6 +461,8 @@ static class Helpers
                 Timeout = Timeout.InfiniteTimeSpan
             };
 
+            
+            type = File.ReadAllText(Config.whereisthedamnscriptat);
             type = type.Replace("{placeId}", placeId.ToString());
             type = type.Replace("{jobId}", jobId);
             type = type.Replace("{port}", fakeahport.ToString());

@@ -8,6 +8,7 @@ static class Config
     public static string RAScript = "print('get a avatar render script nerd')";
     public static string RMScript = "print('get a model render script nerd')";
     public static string RMMScript = "print('get a mesh render script nerd')";
+    public static string whereisthedamnscriptat = "";
     public static int port { get; private set; } = 7000;
     public static int cores { get; private set; } = 1;
     public static bool debug { get; private set; } = false;
@@ -41,6 +42,7 @@ static class Config
                         throw new FileNotFoundException("gameserver script not found", path);
 
                     GSScript = File.ReadAllText(path);
+                    whereisthedamnscriptat = path;
                     break;
 
                 case "--rscript": // render script
