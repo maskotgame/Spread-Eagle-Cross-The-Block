@@ -68,7 +68,8 @@ public class Program
         app.MapPost("/api/v1/gameserver", async (HttpRequest req) =>
         {
             // check authorization so we wont get random ass gameservers
-            if (!req.Headers.TryGetValue("Authorization", out var auth) || !Helpers.IsAuthorized(auth!)) {
+            if (!req.Headers.TryGetValue("Authorization", out var auth) || !Helpers.IsAuthorized(auth!))
+            {
                 return Results.Json(new { error = "unauthorized" }, statusCode: 401);
             }
 
@@ -82,16 +83,20 @@ public class Program
             // do a bunch of variations..
             string jobId = Guid.NewGuid().ToString();
             int port = Helpers.GetPort();
+            int pid;
+            string? render;
             // get client's ip for logging
             var clientIP = req.Headers.TryGetValue("X-Forwarded-For", out var forwarded) ? forwarded.ToString().Split(',')[0].Trim() : req.HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
 
             Logger.Warn($"Received a gameserver request from {clientIP}, creating gameserver job={jobId} place={body.PlaceId} port={port}");
 
             // start the gameserver!
-            if (Helpers.StartGameserver(jobId, port, body.PlaceId, out int pid, out string? render, body.TeamCreate, out int fakeahport) == 0)
+            int fakeahport = Helpers.StartGameserver(jobId, body.PlaceId, out render, body.TeamCreate, out int _, out pid);
+
+            if (fakeahport == 0)
                 return Results.Problem("RCCService couldn't execute OpenJob");
 
-            return Results.Json(new { status = "ready", jobId, fakeahport, pid});
+            return Results.Json(new { status = "ready", jobId, fakeahport, pid });
         });
 
         app.MapPost("/api/v1/gameserver/kill", (HttpRequest http, KillRequest req) =>
@@ -121,8 +126,6 @@ public class Program
             });
         });
 
-
-
         app.MapGet("/api/v1/health", () =>
         {
             // we get ram
@@ -147,7 +150,8 @@ public class Program
 
         app.MapPost("/api/v1/avatar-render", async (HttpRequest req) =>
         {
-            if (!req.Headers.TryGetValue("Authorization", out var auth) || !Helpers.IsAuthorized(auth!)) {
+            if (!req.Headers.TryGetValue("Authorization", out var auth) || !Helpers.IsAuthorized(auth!))
+            {
                 return Results.Json(new { error = "unauthorized" }, statusCode: 401);
             }
 
@@ -156,35 +160,32 @@ public class Program
             if (body == null || body.UserId <= 0)
                 return Results.BadRequest(new { error = "badrequest" });
 
-            bool headshot = body.IsHeadshot;
-            bool isclothing = body.IsClothing;
             string jobId = Guid.NewGuid().ToString();
             int port = Helpers.GetPort();
+            int pid;
+            string? render;
 
             var clientIP = req.Headers.TryGetValue("X-Forwarded-For", out var forwarded) ? forwarded.ToString().Split(',')[0].Trim() : req.HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
 
             Logger.Warn($"Received an avatar render request from {clientIP}, job={jobId} port={port}");
 
-            if (!Helpers.ARender(jobId, port, body.UserId, out int pid, out string? render, headshot, isclothing))
+            if (!Helpers.ARender(jobId, body.UserId, out render, body.IsHeadshot, body.IsClothing))
                 return Results.Problem("RCCService couldn't execute OpenJob");
 
             if (render == null)
                 return Results.Problem("RCCService failed to render");
 
-            if (!Helpers.KillbyID(pid))
-                return Results.NotFound(new { error = "notfound" });
-
             return Results.Json(new
             {
                 jobId,
-                pid,
                 base64 = render
             });
         });
 
         app.MapPost("/api/v1/place-render", async (HttpRequest req) =>
         {
-            if (!req.Headers.TryGetValue("Authorization", out var auth) || !Helpers.IsAuthorized(auth!)) {
+            if (!req.Headers.TryGetValue("Authorization", out var auth) || !Helpers.IsAuthorized(auth!))
+            {
                 return Results.Json(new { error = "unauthorized" }, statusCode: 401);
             }
 
@@ -195,25 +196,21 @@ public class Program
 
             string jobId = Guid.NewGuid().ToString();
             int port = Helpers.GetPort();
+            string? render;
 
             var clientIP = req.Headers.TryGetValue("X-Forwarded-For", out var forwarded) ? forwarded.ToString().Split(',')[0].Trim() : req.HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
 
             Logger.Warn($"Received an place render request from {clientIP}, job={jobId} port={port}");
 
-            if (!Helpers.Render(jobId, port, body.PlaceId, out int pid, out string? render))
+            if (!Helpers.Render(jobId, body.PlaceId, out render))
                 return Results.Problem("RCCService couldn't execute OpenJob");
 
             if (render == null)
                 return Results.Problem("RCCService failed to render");
 
-            // we kill the rccservice instantly because that makes our life easier
-            if (!Helpers.KillbyID(pid))
-                return Results.NotFound(new { error = "notfound" });
-
             return Results.Json(new
             {
                 jobId,
-                pid,
                 base64 = render
             });
         });
@@ -232,24 +229,21 @@ public class Program
 
             string jobId = Guid.NewGuid().ToString();
             int port = Helpers.GetPort();
+            string? render;
 
             var clientIP = req.Headers.TryGetValue("X-Forwarded-For", out var forwarded) ? forwarded.ToString().Split(',')[0].Trim() : req.HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
 
             Logger.Warn($"Received a model render request from {clientIP}, job={jobId} port={port}");
 
-            if (!Helpers.MRender(jobId, port, body.AssetId, out int pid, out string? render))
+            if (!Helpers.MRender(jobId, body.AssetId, out render))
                 return Results.Problem("RCCService couldn't execute OpenJob");
 
             if (render == null)
                 return Results.Problem("RCCService failed to render");
 
-            if (!Helpers.KillbyID(pid))
-                return Results.NotFound(new { error = "notfound" });
-
             return Results.Json(new
             {
                 jobId,
-                pid,
                 base64 = render
             });
         });
@@ -268,54 +262,23 @@ public class Program
 
             string jobId = Guid.NewGuid().ToString();
             int port = Helpers.GetPort();
+            string? render;
 
             var clientIP = req.Headers.TryGetValue("X-Forwarded-For", out var forwarded) ? forwarded.ToString().Split(',')[0].Trim() : req.HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
 
             Logger.Warn($"Received a mesh render request from {clientIP}, job={jobId} port={port}");
 
-            if (!Helpers.MMRender(jobId, port, body.MeshId, out int pid, out string? render))
+            if (!Helpers.MMRender(jobId, body.MeshId, out render))
                 return Results.Problem("RCCService couldn't execute OpenJob");
 
             if (render == null)
                 return Results.Problem("RCCService failed to render");
 
-            if (!Helpers.KillbyID(pid))
-                return Results.NotFound(new { error = "notfound" });
-
             return Results.Json(new
             {
                 jobId,
-                pid,
                 base64 = render
             });
-        });
-
-        app.MapGet("/", () =>
-        {
-            var assembly = Assembly.GetExecutingAssembly();
-
-            var videos = assembly.GetManifestResourceNames().Where(n => n.StartsWith("Arbiter.videos.", StringComparison.OrdinalIgnoreCase) && (n.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase) || n.EndsWith(".mov", StringComparison.OrdinalIgnoreCase))).ToArray();
-            // WTF IS THIS CODE
-            if (videos.Length == 0)
-                return Results.NotFound("No embedded videos found :(");
-
-            var chosen = videos[Random.Shared.Next(videos.Length)];
-
-            using var resourceStream = assembly.GetManifestResourceStream(chosen);
-            if (resourceStream == null)
-                // fuck you idiot
-                // use Problem, not NotFound
-                return Results.Problem("Couldn't load video");
-
-            var ms = new MemoryStream();
-            resourceStream.CopyTo(ms);
-            ms.Position = 0;
-
-            return Results.File(
-                ms,
-                contentType: chosen.EndsWith(".mov", StringComparison.OrdinalIgnoreCase) ? "video/quicktime" : "video/mp4",
-                enableRangeProcessing: true
-            );
         });
 
         app.MapPost("/api/v1/renewlease", (HttpRequest req, RenewLeaseBody body) =>

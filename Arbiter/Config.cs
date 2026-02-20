@@ -20,6 +20,7 @@ static class Config
     public static string AccessKey = "my-mother-ate-fries-lol";
     public static string FakeSECRET = "";
     public static bool experimental { get; private set; } = false;
+    public static bool removeRCCLogs { get; private set; } = false;
     public static void ReloadScripts()
     {
         try
@@ -174,6 +175,10 @@ static class Config
 
                 case "--experimental": // experimental
                     experimental = true;
+                    break;
+
+                case "--removercclogs": // experimental
+                    removeRCCLogs = true;
                     break;
             }
         }
