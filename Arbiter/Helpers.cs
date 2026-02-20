@@ -16,25 +16,72 @@ static class Helpers
     private static readonly Dictionary<string, GSMJob> Jobs = new();
     private static readonly object JobsLock = new();
     private static bool _gsmStarted;
-
     private static readonly object PoolLock = new();
     private static readonly int TargetPool = 5;
     private static readonly Dictionary<int, Process> idle = new();
     private static readonly Dictionary<int, Process> pending = new();
     private static readonly Dictionary<int, Process> active = new();
+    private static bool _isFilling;
+    private static readonly HttpClient client = new HttpClient
+    {
+        Timeout = Timeout.InfiniteTimeSpan
+    };
 
     private static void keepPoolsFull()
     {
         lock (PoolLock)
         {
+            if (_isFilling)
+                return;
+
             int current = idle.Count + pending.Count;
-            int missing = TargetPool - current;
-            for (int i = 0; i < missing; i++)
-            {
-                int port = GetPort();
-                pending[port] = startPending(port);
-            }
+            if (current >= TargetPool)
+                return;
+
+            _isFilling = true;
         }
+
+        ThreadPool.QueueUserWorkItem(_ => // i guess bro
+        {
+            try
+            {
+                while (true)
+                {
+                    int port;
+
+                    lock (PoolLock)
+                    {
+                        int current = idle.Count + pending.Count;
+                        if (current >= TargetPool)
+                            break;
+
+                        port = GetPort();
+                        pending[port] = null;
+                    }
+
+                    var proc = startPending(port);
+
+                    lock (PoolLock)
+                    {
+                        pending.Remove(port);
+
+                        if (proc != null)
+                        {
+                            idle[port] = proc;
+                        }
+                    }
+
+                    Thread.Sleep(500);
+                }
+            }
+            finally
+            {
+                lock (PoolLock)
+                {
+                    _isFilling = false;
+                }
+            }
+        });
     }
 
     private static Process? startPending(int port)
@@ -45,18 +92,17 @@ static class Helpers
             return null;
         }
 
-        const int attempts = 24;
+        const int attempts = 10;
         var alive = false;
         for (int i = 0; i < attempts; i++)
         {
             try
             {
-                using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(2) };
                 var resp = client.GetAsync($"http://127.0.0.1:{port}/").GetAwaiter().GetResult();
                 alive = true;
                 break;
             }
-            catch { Thread.Sleep(500); }
+            catch { Thread.Sleep(200); }
         }
 
         if (!alive)
@@ -80,10 +126,17 @@ static class Helpers
     {
         lock (PoolLock)
         {
-            if (idle.Count > 0)
+            while (idle.Count > 0)
             {
                 var kv = idle.First();
                 idle.Remove(kv.Key);
+
+                if (!AwaitRCCService(kv.Key, 2))
+                {
+                    Kill(kv.Value);
+                    continue;
+                }
+
                 active[kv.Key] = kv.Value;
                 keepPoolsFull();
                 return (kv.Value, kv.Key);
@@ -91,6 +144,9 @@ static class Helpers
 
             int port = GetPort();
             var proc = startPending(port);
+            if (proc == null)
+                return (null, 0);
+
             active[port] = proc;
             return (proc, port);
         }
@@ -236,10 +292,7 @@ static class Helpers
         string token = header["Bearer ".Length..];
         using var sha = SHA256.Create();
         var expected = Convert.ToHexString(sha.ComputeHash(Encoding.UTF8.GetBytes(Config.SECRET)));
-        return CryptographicOperations.FixedTimeEquals(
-            Encoding.UTF8.GetBytes(token),
-            Encoding.UTF8.GetBytes(expected)
-        );
+        return CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(token), Encoding.UTF8.GetBytes(expected));
     }
 
     public static int GetPort()
@@ -278,12 +331,6 @@ static class Helpers
         if (proc == null) return false;
         int pid = proc.Id;
 
-        if (!AwaitRCCService(SOAPPort, 8000))
-        {
-            Kill(proc);
-            return false;
-        }
-
         if (!SOAP(jobId, SOAPPort, placeId, Config.RScript, 60, 2, out render))
         {
             Kill(proc);
@@ -300,12 +347,6 @@ static class Helpers
         var (proc, SOAPPort) = getRCCService();
         if (proc == null) return false;
         int pid = proc.Id;
-
-        if (!AwaitRCCService(SOAPPort, 8000))
-        {
-            Kill(proc);
-            return false;
-        }
 
         if (!SOAP(jobId, SOAPPort, placeId, Config.RAScript, 60, 2, out render, false, 53640, headshot, isclothing))
         {
@@ -324,12 +365,6 @@ static class Helpers
         if (proc == null) return false;
         int pid = proc.Id;
 
-        if (!AwaitRCCService(SOAPPort, 8000))
-        {
-            Kill(proc);
-            return false;
-        }
-
         if (!SOAP(jobId, SOAPPort, placeId, Config.RMScript, 60, 2, out render))
         {
             Kill(proc);
@@ -346,12 +381,6 @@ static class Helpers
         var (proc, SOAPPort) = getRCCService();
         if (proc == null) return false;
         int pid = proc.Id;
-
-        if (!AwaitRCCService(SOAPPort, 8000))
-        {
-            Kill(proc);
-            return false;
-        }
 
         if (!SOAP(jobId, SOAPPort, placeId, Config.RMMScript, 60, 2, out render))
         {
@@ -373,13 +402,6 @@ static class Helpers
         if (proc == null) return 0;
 
         pid = proc.Id;
-
-        if (!AwaitRCCService(SOAPPort, 12000))
-        {
-            Kill(proc);
-            releaseRCCService(SOAPPort);
-            return 0;
-        }
 
         if (!SOAP(jobId, SOAPPort, placeId, Config.GSScript, 604800, 1, out render, teamcreate, fakeahport))
         {
@@ -429,11 +451,10 @@ static class Helpers
             if (win) proc.PriorityClass = ProcessPriorityClass.High;
 
             bool ready = false;
-            for (int i = 0; i < 20; i++)
+            for (int i = 0; i < 5; i++)
             {
                 try
                 {
-                    using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(2) };
                     var resp = client.GetAsync($"http://127.0.0.1:{port}/").GetAwaiter().GetResult();
                     ready = true;
                     break;
@@ -478,10 +499,9 @@ static class Helpers
         catch { return false; }
     }
 
-    private static bool AwaitRCCService(int port, int timeoutMs)
+    private static bool AwaitRCCService(int port, int timeoutMs) // no longer used, maybe find a use for this later?
     {
         var sw = Stopwatch.StartNew();
-        using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
 
         while (sw.ElapsedMilliseconds < timeoutMs)
         {
@@ -507,7 +527,6 @@ static class Helpers
             ServicePointManager.Expect100Continue = false;
             ServicePointManager.UseNagleAlgorithm = false;
 
-            using var client = new HttpClient { Timeout = Timeout.InfiniteTimeSpan };
             type = type.Replace("{placeId}", placeId.ToString());
             type = type.Replace("{jobId}", jobId);
             type = type.Replace("{port}", fakeahport.ToString());
@@ -658,7 +677,6 @@ static class Helpers
     {
         try
         {
-            using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
 
             var soap = $@"<?xml version=""1.0"" encoding=""utf-8""?>
 <soapenv:Envelope xmlns:soapenv=""http://schemas.xmlsoap.org/soap/envelope/""

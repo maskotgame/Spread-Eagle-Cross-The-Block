@@ -355,6 +355,10 @@ public class Program
         });
         Logger.Print("Intializing Game Monitor Service");
         Helpers.StartGSM();
+
+        Logger.Print("Intializing RCCService Pool");
+        Helpers.runPoolManager();
+        Thread.Sleep(3000);
         app.Run($"http://0.0.0.0:{Config.port}");
     }
 }
