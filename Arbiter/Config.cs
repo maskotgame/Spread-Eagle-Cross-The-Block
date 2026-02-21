@@ -21,6 +21,8 @@ static class Config
     public static string FakeSECRET = "";
     public static bool experimental { get; private set; } = false;
     public static bool removeRCCLogs { get; private set; } = false;
+    public static bool Ready { get; set; } = false; // DO NOT CHANGE THIS. THIS WILL BE AUTO SET IF RCCSERVICES ARE READY.
+
     public static void ReloadScripts()
     {
         try

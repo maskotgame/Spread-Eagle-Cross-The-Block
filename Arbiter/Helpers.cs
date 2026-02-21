@@ -303,6 +303,25 @@ static class Helpers
             while (true)
             {
                 keepPoolsFull();
+
+                bool ready;
+
+                lock (PoolLock)
+                {
+                    int total = active.Count + idle.Count;
+
+                    if (total < TargetPool || pending.Count > 0)
+                    {
+                        ready = false;
+                    }
+                    else
+                    {
+                        ready = active.Keys.Concat(idle.Keys).All(port => AwaitRCCService(port, 1));
+                    }
+
+                    Config.Ready = ready;
+                }
+
                 Thread.Sleep(2000);
             }
         })

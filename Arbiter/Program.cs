@@ -65,6 +65,25 @@ public class Program
         var builder = WebApplication.CreateBuilder(args);
         var app = builder.Build();
 
+        app.Use(async (context, next) =>
+        {
+            if (!Config.Ready && !context.Request.Path.StartsWithSegments("/api/v1/health"))
+            {
+                context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
+                context.Response.Headers["Retry-After"] = "30";
+
+                await context.Response.WriteAsJsonAsync(new
+                {
+                    error = "Service Unavailable",
+                    message = "Prewarming RCCService"
+                });
+
+                return;
+            }
+
+            await next();
+        });
+
         app.MapPost("/api/v1/gameserver", async (HttpRequest req) =>
         {
             // check authorization so we wont get random ass gameservers
