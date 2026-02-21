@@ -28,6 +28,8 @@ static class Helpers
     };
     private static readonly Dictionary<int, int> usage = new();
     private const int MaxJobs = 20;
+    private static readonly HashSet<int> dedicated = new();
+    private const int MaxDedicated = 2;
 
     private static int howmuchRCCService()
     {
@@ -158,60 +160,99 @@ static class Helpers
         {
             usage[port] = 0;
             active[port] = proc;
+            dedicated.Add(port);
         }
 
         return (proc, port);
     }
 
-    private static (Process? proc, int port) getRCCService()
+    private static (Process? proc, int port, bool panic) getRCCService()
     {
-        lock (PoolLock)
+        while (true)
         {
-            var kv = idle.OrderBy(kv => usage.TryGetValue(kv.Key, out var c) ? c : 0).FirstOrDefault();
-
-            if (!kv.Equals(default(KeyValuePair<int, Process>)))
+            lock (PoolLock)
             {
-                int port = kv.Key;
-                var proc = kv.Value;
-                idle.Remove(port);
-
-                if (!AwaitRCCService(port, 2))
+                if (idle.Count > 0)
                 {
-                    Kill(proc);
-                    usage.Remove(port);
-                    return getRCCService();
+                    var kv = idle.OrderBy(kv => usage.TryGetValue(kv.Key, out var c) ? c : 0).First();
+
+                    int port = kv.Key;
+                    var proc = kv.Value;
+                    idle.Remove(port);
+
+                    if (!AwaitRCCService(port, 2))
+                    {
+                        Kill(proc);
+                        usage.Remove(port);
+                        continue;
+                    }
+
+                    active[port] = proc;
+                    usage[port] = usage.TryGetValue(port, out var c) ? c + 1 : 1;
+
+                    return (proc, port, false);
                 }
 
-                active[port] = proc;
-                usage[port] = usage.TryGetValue(port, out var c) ? c + 1 : 1;
+                if (howmuchRCCService() < TargetPool)
+                {
+                    int port = GetPort();
+                    pending[port] = null!;
 
-                return (proc, port);
+                    Monitor.Exit(PoolLock);
+
+                    var proc = startPending(port);
+
+                    Monitor.Enter(PoolLock);
+
+                    pending.Remove(port);
+
+                    if (proc == null)
+                        continue;
+
+                    active[port] = proc;
+                    usage[port] = 1;
+
+                    return (proc, port, false);
+                }
+
+                Monitor.Wait(PoolLock);
+
+                Logger.Warn("All jobs are busy. Spawning new RCCService..");
+
+                Monitor.Exit(PoolLock);
+
+                int pport = GetPort();
+                var pproc = RCCService(pport);
+
+                if (pproc == null)
+                {
+                    Monitor.Enter(PoolLock);
+                    Thread.Sleep(100);
+                    continue;
+                }
+
+                bool alive = false;
+                for (int i = 0; i < 10; i++)
+                {
+                    try
+                    {
+                        client.GetAsync($"http://127.0.0.1:{pport}/").GetAwaiter().GetResult();
+                        alive = true;
+                        break;
+                    }
+                    catch { Thread.Sleep(200); }
+                }
+
+                Monitor.Enter(PoolLock);
+
+                if (!alive)
+                {
+                    Kill(pproc);
+                    continue;
+                }
+
+                return (pproc, pport, true);
             }
-
-            if (howmuchRCCService() >= TargetPool)
-            {
-                Monitor.Wait(PoolLock, 500);
-                return getRCCService();
-            }
-
-            int newPort = GetPort();
-            pending[newPort] = null!;
-
-            Monitor.Exit(PoolLock);
-
-            var newProc = startPending(newPort);
-
-            Monitor.Enter(PoolLock);
-
-            pending.Remove(newPort);
-
-            if (newProc == null)
-                return (null, 0);
-
-            active[newPort] = newProc;
-            usage[newPort] = 1;
-
-            return (newProc, newPort);
         }
     }
 
@@ -220,6 +261,9 @@ static class Helpers
         lock (PoolLock)
         {
             if (!active.TryGetValue(port, out var proc))
+                return;
+
+            if (dedicated.Contains(port))
                 return;
 
             active.Remove(port);
@@ -401,7 +445,7 @@ static class Helpers
     public static bool Render(string jobId, int placeId, out string? render)
     {
         render = null;
-        var (proc, SOAPPort) = getRCCService();
+        var (proc, SOAPPort, panic) = getRCCService();
         if (proc == null) return false;
         int pid = proc.Id;
 
@@ -411,14 +455,21 @@ static class Helpers
             return false;
         }
 
-        releaseRCCService(SOAPPort);
+        if (panic)
+        {
+            Kill(proc);
+        }
+        else
+        {
+            releaseRCCService(SOAPPort);
+        }
         return true;
     }
 
     public static bool ARender(string jobId, int placeId, out string? render, bool headshot, bool isclothing)
     {
         render = null;
-        var (proc, SOAPPort) = getRCCService();
+        var (proc, SOAPPort, panic) = getRCCService();
         if (proc == null) return false;
         int pid = proc.Id;
 
@@ -428,14 +479,21 @@ static class Helpers
             return false;
         }
 
-        releaseRCCService(SOAPPort);
+        if (panic)
+        {
+            Kill(proc);
+        }
+        else
+        {
+            releaseRCCService(SOAPPort);
+        }
         return true;
     }
 
     public static bool MRender(string jobId, int placeId, out string? render)
     {
         render = null;
-        var (proc, SOAPPort) = getRCCService();
+        var (proc, SOAPPort, panic) = getRCCService();
         if (proc == null) return false;
         int pid = proc.Id;
 
@@ -445,14 +503,21 @@ static class Helpers
             return false;
         }
 
-        releaseRCCService(SOAPPort);
+        if (panic)
+        {
+            Kill(proc);
+        }
+        else
+        {
+            releaseRCCService(SOAPPort);
+        }
         return true;
     }
 
     public static bool MMRender(string jobId, int placeId, out string? render)
     {
         render = null;
-        var (proc, SOAPPort) = getRCCService();
+        var (proc, SOAPPort, panic) = getRCCService();
         if (proc == null) return false;
         int pid = proc.Id;
 
@@ -462,7 +527,14 @@ static class Helpers
             return false;
         }
 
-        releaseRCCService(SOAPPort);
+        if (panic)
+        {
+            Kill(proc);
+        }
+        else
+        {
+            releaseRCCService(SOAPPort);
+        }
         return true;
     }
 
@@ -471,8 +543,40 @@ static class Helpers
         render = null;
         fakeahport = GetGameServerPort();
         pid = 0;
+        bool panic = false;
 
-        var (proc, SOAPPort) = startDedicatedRCCService();
+        Process? proc;
+        int SOAPPort;
+
+        lock (PoolLock)
+        {
+            int dedicatedCount = dedicated.Count;
+
+            if (dedicatedCount >= MaxDedicated)
+            {
+                Logger.Warn($"{dedicatedCount} dedicated servers active and will likely burn out the machine, using pooled RCCServices");
+
+                var kv = idle.FirstOrDefault();
+
+                if (!kv.Equals(default(KeyValuePair<int, Process>)))
+                {
+                    SOAPPort = kv.Key;
+                    proc = kv.Value;
+
+                    idle.Remove(SOAPPort);
+                    active[SOAPPort] = proc;
+                }
+                else
+                {
+                    (proc, SOAPPort, panic) = getRCCService();
+                }
+            }
+            else
+            {
+                (proc, SOAPPort) = startDedicatedRCCService();
+            }
+        }
+
         if (proc == null) return 0;
 
         pid = proc.Id;
@@ -480,7 +584,20 @@ static class Helpers
         if (!SOAP(jobId, SOAPPort, placeId, Config.GSScript, 604800, 1, out render, teamcreate, fakeahport))
         {
             Kill(proc);
-            releaseRCCService(SOAPPort);
+
+            lock (PoolLock)
+            {
+                dedicated.Remove(SOAPPort);
+            }
+
+            if (panic)
+            {
+                Kill(proc);
+            }
+            else
+            {
+                releaseRCCService(SOAPPort);
+            }
             return 0;
         }
 
@@ -497,11 +614,6 @@ static class Helpers
                 Players = 0,
                 Alive = true
             };
-        }
-
-        lock (PoolLock)
-        {
-            usage[SOAPPort] = usage.TryGetValue(SOAPPort, out var c) ? c + 1 : 1;
         }
 
         return fakeahport;
@@ -809,14 +921,24 @@ static class Helpers
 
     private static void RCCServiceExit(int pid, int port)
     {
+        bool booldedicated;
+
         lock (PoolLock)
         {
+            booldedicated = dedicated.Contains(port);
+
             idle.Remove(port);
             active.Remove(port);
             pending.Remove(port);
             usage.Remove(port);
+            dedicated.Remove(port);
 
             Monitor.PulseAll(PoolLock);
+        }
+
+        if (!booldedicated)
+        {
+            keepPoolsFull();
         }
 
         keepPoolsFull();
