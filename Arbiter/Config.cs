@@ -22,6 +22,8 @@ static class Config
     public static bool experimental { get; private set; } = false;
     public static bool removeRCCLogs { get; private set; } = false;
     public static bool Ready { get; set; } = false; // DO NOT CHANGE THIS. THIS WILL BE AUTO SET IF RCCSERVICES ARE READY.
+    public static bool realtime { get; set; } = false;
+    public static string name = "RCCService";
 
     public static void ReloadScripts()
     {
@@ -181,6 +183,17 @@ static class Config
 
                 case "--removercclogs": // experimental
                     removeRCCLogs = true;
+                    break;
+
+                case "--realtime": // realtime priority
+                    realtime = true;
+                    break;
+
+                case "--name": // rccservice name (example: ACCService)
+                    if (i + 1 >= args.Length)
+                        throw new ArgumentException("--name requires a value");
+
+                    AccessKey = args[++i];
                     break;
             }
         }

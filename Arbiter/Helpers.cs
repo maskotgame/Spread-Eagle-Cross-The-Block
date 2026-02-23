@@ -643,7 +643,7 @@ static class Helpers
         try
         {
             Config.ReloadScripts();
-            string exe = Path.Combine(Config.RCCDirectory, "RCCService.exe");
+            string exe = Path.Combine(Config.RCCDirectory, $"{Config.name}.exe");
             bool win = RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
 
             var psi = new ProcessStartInfo
@@ -661,9 +661,15 @@ static class Helpers
             proc.EnableRaisingEvents = true;
             proc.Exited += (_, __) => RCCServiceExit(proc.Id, port);
 
-            if (win) proc.PriorityClass = ProcessPriorityClass.High;
+            if (Config.realtime)
+            {
+                if (win) proc.PriorityClass = ProcessPriorityClass.RealTime;
+            } else
+            {
+                if (win) proc.PriorityClass = ProcessPriorityClass.High;
+            }
 
-            bool ready = false;
+                bool ready = false;
             for (int i = 0; i < 5; i++)
             {
                 try
