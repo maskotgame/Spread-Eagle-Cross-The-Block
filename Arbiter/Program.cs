@@ -18,7 +18,7 @@ using System.Reflection;
 
 public class Program
 {
-    public static void Main(string[] args)
+    public static async Task Main(string[] args)
     {
         Console.Title = "ANotherRccServiceArbiterLol";
         try
@@ -60,6 +60,7 @@ public class Program
             Logger.Warn("SysStats skipped");
         }
 
+        await Deploy.Start();
         Logger.Print("Service starting...");
 
         var builder = WebApplication.CreateBuilder(args);

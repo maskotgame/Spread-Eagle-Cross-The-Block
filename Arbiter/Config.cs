@@ -193,7 +193,7 @@ static class Config
                     if (i + 1 >= args.Length)
                         throw new ArgumentException("--name requires a value");
 
-                    AccessKey = args[++i];
+                    name = args[++i];
                     break;
             }
         }
