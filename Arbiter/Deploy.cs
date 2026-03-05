@@ -102,7 +102,13 @@ public static class Deploy
             string tempnumbatwo = Path.Combine(Path.GetTempPath(), file + ".tmp");
             string target = Path.Combine(AppContext.BaseDirectory, file);
 
-            File.Copy(tempnumbatwo, target, overwrite: true);
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = "cmd.exe",
+                Arguments = $"/C timeout 1 & move /Y \"{tempnumbatwo}\" \"{target}\"",
+                CreateNoWindow = true,
+                WindowStyle = ProcessWindowStyle.Hidden
+            });
         }
 
         Environment.Exit(0);
