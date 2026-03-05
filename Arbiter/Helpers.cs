@@ -642,7 +642,6 @@ static class Helpers
     {
         try
         {
-            Config.ReloadScripts();
             string exe = Path.Combine(Config.RCCDirectory, $"{Config.name}.exe");
             bool win = RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
 
@@ -742,6 +741,7 @@ static class Helpers
     private static bool SOAP(string jobId, int port, int placeId, string type, int howlonguntilwedie, int category, out string? render, bool teamcreate = false, int fakeahport = 53640, bool headshot = false, bool isclothing = false, List<LuaValue>? arguments = null)
     {
         render = null;
+        Config.ReloadScripts();
         try
         {
             ServicePointManager.Expect100Continue = false;
@@ -825,7 +825,7 @@ static class Helpers
             if (category == 2)
             {
                 var doc = XDocument.Parse(responseText);
-                if (doc.Descendants().Any(e => e.Name.LocalName == "Fault")) return false;
+                if (doc.Descendants().Any(e => e.Name.LocalName == "faultstring")) return false;
 
                 var value = doc.Descendants().FirstOrDefault(e => e.Name.LocalName == "value");
                 if (value != null) render = value.Value.Trim();
