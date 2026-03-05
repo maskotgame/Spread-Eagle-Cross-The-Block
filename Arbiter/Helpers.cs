@@ -124,7 +124,7 @@ static class Helpers
         try
         {
             string? tmp;
-            SOAP(Guid.NewGuid().ToString(), port, 0, "return game:GetService('RunService'):Run()", 10, 0, out tmp);
+            SOAP(Guid.NewGuid().ToString(), port, 0, "return game:GetService('RunService'):Run()", 10, 0, out tmp, enforceSigning: false);
         }
         catch {}
 
@@ -154,7 +154,7 @@ static class Helpers
         }
         if (!alive) { Kill(proc); return (null, 0); }
 
-        try { string? tmp; SOAP(Guid.NewGuid().ToString(), port, 0, "return game:GetService('RunService'):Run()", 5, 0, out tmp); } catch { }
+        try { string? tmp; SOAP(Guid.NewGuid().ToString(), port, 0, "return game:GetService('RunService'):Run()", 5, 0, out tmp, enforceSigning: false); } catch { }
 
         lock (PoolLock)
         {
@@ -687,7 +687,7 @@ static class Helpers
             {
                 string? r;
                 //SOAP(Guid.NewGuid().ToString(), port, 0, "return true", 10, 0, out r);
-                try { string? tmp; SOAP(Guid.NewGuid().ToString(), port, 0, "return game:GetService('RunService'):Run()", 5, 0, out tmp); } catch { }
+                try { string? tmp; SOAP(Guid.NewGuid().ToString(), port, 0, "return game:GetService('RunService'):Run()", 5, 0, out tmp, enforceSigning: false); } catch { }
             }
             catch { }
 
@@ -738,10 +738,39 @@ static class Helpers
         return false;
     }
 
-    private static bool SOAP(string jobId, int port, int placeId, string type, int howlonguntilwedie, int category, out string? render, bool teamcreate = false, int fakeahport = 53640, bool headshot = false, bool isclothing = false, List<LuaValue>? arguments = null)
+    private static bool SOAP(string jobId, int port, int placeId, string type, int howlonguntilwedie, int category, out string? render, bool teamcreate = false, int fakeahport = 53640, bool headshot = false, bool isclothing = false, List<LuaValue>? arguments = null, bool enforceSigning = false)
     {
         render = null;
+
         Config.ReloadScripts();
+        if (Config.signing && enforceSigning)
+        {
+            string script = type.Trim();
+            string[] lines = script.Split(new[] { "\r\n", "\n" }, StringSplitOptions.None);
+
+            if (lines.Length == 0)
+            {
+                Logger.Error("Script is empty.");
+                return false;
+            }
+
+            string signatureLine = lines[0].Trim();
+            string scriptContent = string.Join("\n", lines.Skip(1)).Trim();
+
+            bool valid = Config.Verification(scriptContent, signatureLine);
+
+            if (!valid)
+            {
+                Logger.Error("Script verification failed, please check your script signatures and try again");
+                return false;
+            } else
+            {
+                if (Config.debug)
+                    Logger.Print("Signature is valid");
+            }
+
+            type = scriptContent;
+        }
         try
         {
             ServicePointManager.Expect100Continue = false;

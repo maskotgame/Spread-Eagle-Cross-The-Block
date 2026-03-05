@@ -39,31 +39,32 @@ static class Config
                     return;
 
                 string content = File.ReadAllText(path);
+                content = content.Replace("\r\n", "\n").Trim();
 
-                string scriptToLoad = null;
+                string scriptToLoad = content;
 
                 if (signing)
                 {
-                    string[] lines = content.Split(new[] { "\r\n", "\n" }, StringSplitOptions.None);
-                    if (lines.Length == 0 || !lines[0].StartsWith("%") || !lines[0].EndsWith("%"))
+                    var lines = content.Split('\n', StringSplitOptions.None);
+
+                    bool hasSignature = lines.Length > 0 && lines[0].Trim().StartsWith("--anrsalsig%") && lines[0].Trim().EndsWith("%");
+
+                    if (!hasSignature)
                     {
                         SignScript(path, content);
-                        content = File.ReadAllText(path);
-                        lines = content.Split(new[] { "\r\n", "\n" }, StringSplitOptions.None);
+                        content = File.ReadAllText(path).Replace("\r\n", "\n").Trim();
+                        lines = content.Split('\n', StringSplitOptions.None);
                     }
 
-                    string signatureLine = lines[0];
-                    scriptToLoad = lines.Length > 1 ? string.Join(Environment.NewLine, lines.Skip(1)) : "";
+                    string signatureLine = lines[0].Trim();
+
+                    scriptToLoad = string.Join("\n", lines.Skip(1)).Trim();
 
                     if (!Verification(scriptToLoad, signatureLine))
                     {
-                        Logger.Error($"Signature invalid: {path}");
+                        Logger.Error($"Signature invalid: {path}, {signatureLine}");
                         return;
                     }
-                }
-                else
-                {
-                    scriptToLoad = content;
                 }
 
                 scriptField = scriptToLoad;
@@ -74,84 +75,108 @@ static class Config
             LoadScript(ref RAScript, RAScriptPath);
             LoadScript(ref RMScript, RMScriptPath);
             LoadScript(ref RMMScript, RMMScriptPath);
+
+            if (debug)
+                Logger.Info("Scripts reloaded successfully.");
         }
         catch (Exception ex)
         {
             Logger.Error("Configuration reload failed: " + ex);
         }
     }
+
     public static string Signature(string script)
     {
-        using (var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(SECRET)))
-        {
-            byte[] hash = hmac.ComputeHash(Encoding.UTF8.GetBytes(script));
-            string base64 = Convert.ToBase64String(hash);
-            char[] arr = base64.ToCharArray();
-            Array.Reverse(arr);
-            string reversedBase64 = new string(arr);
-            Logger.Print($"Signed script with {reversedBase64}");
-            return "--anrsalsig" + reversedBase64;
-        }
+        script = script.Replace("\r\n", "\n");
+
+        using var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(SECRET));
+        byte[] hash = hmac.ComputeHash(Encoding.UTF8.GetBytes(script));
+
+        string base64 = Convert.ToBase64String(hash);
+
+        char[] arr = base64.ToCharArray();
+        Array.Reverse(arr);
+        string reversed = new string(arr);
+
+        string finalSig = $"--anrsalsig%{reversed}%";
+
+        if (debug)
+            Logger.Print($"Signed script with {finalSig}");
+
+        return finalSig;
     }
 
     public static bool Verification(string script, string signature)
     {
         try
         {
-            if (string.IsNullOrWhiteSpace(signature) || !signature.StartsWith("--rbxsig"))
+            string fakeahscript = script.TrimStart();
+            if (fakeahscript.StartsWith("return ", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            if (string.IsNullOrWhiteSpace(signature))
                 return false;
 
-            string base64 = signature.Substring(9);
+            string sig = signature.Trim();
 
-            char[] arr = base64.ToCharArray();
+            string prefix = "--anrsalsig%";
+            if (!sig.StartsWith(prefix) || !sig.EndsWith("%"))
+                return false;
+
+            string sigValue = sig.Substring(prefix.Length, sig.Length - prefix.Length - 1);
+
+            char[] arr = sigValue.ToCharArray();
             Array.Reverse(arr);
             string originalBase64 = new string(arr);
 
-            using (var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(SECRET)))
+            using var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(SECRET));
+
+            script = script.Replace("\r\n", "\n");
+
+            byte[] hash = hmac.ComputeHash(Encoding.UTF8.GetBytes(script));
+            string computedBase64 = Convert.ToBase64String(hash);
+
+            if (debug)
             {
-                byte[] hash = hmac.ComputeHash(Encoding.UTF8.GetBytes(script));
-                string computedBase64 = Convert.ToBase64String(hash);
-
-                return CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(computedBase64), Encoding.UTF8.GetBytes(originalBase64));
+                Logger.Info($"Computed Base64: {computedBase64}");
             }
+
+            return CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(computedBase64), Encoding.UTF8.GetBytes(originalBase64));
         }
-        catch
+        catch (Exception ex)
         {
+            if (debug) Logger.Error($"Verification exception: {ex}");
             return false;
         }
-    }
-
-    public static bool VerifyScript(string signedScript, out string script)
-    {
-        script = "";
-
-        var lines = signedScript.Split('\n');
-
-        if (!lines[0].StartsWith("--anrsalsig"))
-            return false;
-
-        string signature = lines[0].Substring(12).Trim();
-
-        script = string.Join("\n", lines.Skip(1));
-
-        return Verification(script, signature);
     }
 
     public static void SignScript(string path, string script)
     {
         try
         {
+            if (script.StartsWith("--anrsalsig%"))
+            {
+                int firstNewline = script.IndexOf('\n');
+                if (firstNewline != -1)
+                    script = script.Substring(firstNewline + 1);
+            }
+
+            script = script.Replace("\r\n", "\n");
+
             string sig = Signature(script);
-            string signedContent = sig + Environment.NewLine + script;
+
+            string signedContent = sig + "\n" + script;
 
             File.WriteAllText(path, signedContent);
 
             if (debug)
-                Logger.Info($"Signed script saved: {path}");
+                Logger.Info($"Signed script: {path}");
         }
         catch (Exception ex)
         {
-            Logger.Error($"Failed to save signed script {path}: {ex}");
+            Logger.Error($"Couldn't save signed script {path}: {ex}");
         }
     }
 
