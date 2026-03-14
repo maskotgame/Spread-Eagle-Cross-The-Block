@@ -812,23 +812,22 @@ static class Helpers
                 xml.AppendLine("    </rob:arguments>");
             }
 
-            var soap = $@"<soapenv:Envelope xmlns:soapenv=""http://schemas.xmlsoap.org/soap/envelope/"" xmlns:rob=""http://{Config.BaseURL}/"">
-<soapenv:Body>
-  <rob:OpenJobEx>
-    <rob:job>
-      <rob:id>{jobId}</rob:id>
-      <rob:expirationInSeconds>{howlonguntilwedie}</rob:expirationInSeconds>
-      <rob:cores>{Config.cores}</rob:cores>
-    </rob:job>
-    <rob:script>
-      <rob:name>{jobId}</rob:name>
-      <rob:script><![CDATA[
-{type}
-      ]]></rob:script>
-{xml}
-    </rob:script>
-  </rob:OpenJobEx>
-</soapenv:Body>
+            var soap = $@"<?xml version=""1.0"" encoding=""utf-8""?>
+<soapenv:Envelope xmlns:xsi=""http://www.w3.org/2001/XMLSchema-instance"" xmlns:xsd=""http://www.w3.org/2001/XMLSchema"" xmlns:soapenv=""http://schemas.xmlsoap.org/soap/envelope/"" xmlns:rob=""http://{Config.BaseURL}/"">
+  <soapenv:Body>
+    <rob:OpenJobEx>
+      <rob:job>
+        <rob:id>{jobId}</rob:id>
+        <rob:expirationInSeconds>{howlonguntilwedie}</rob:expirationInSeconds>
+        <rob:cores>{Config.cores}</rob:cores>
+      </rob:job>
+      <rob:script>
+        <rob:name>{jobId}</rob:name>
+        <rob:script><![CDATA[{type}]]></rob:script>
+      </rob:script>
+      {xml}
+    </rob:OpenJobEx>
+  </soapenv:Body>
 </soapenv:Envelope>";
 
             using var req = new HttpRequestMessage(HttpMethod.Post, $"http://127.0.0.1:{port}/");
